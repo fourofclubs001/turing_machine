@@ -315,8 +315,11 @@
 
     #tape-cells {
       display: flex;
-      justify-content: center;
+      overflow: hidden;
+      cursor: grab;
+      user-select: none;
     }
+    #tape-cells.tape-dragging { cursor: grabbing; }
 
     .tape-cell {
       position: relative;
@@ -346,15 +349,30 @@
     }
     .tape-symbol.blank { color: #c0bab0; }
 
-    #tape-indicator-row { display: flex; justify-content: center; }
+    #tape-indicator-row { display: flex; overflow: hidden; }
     .tape-indicator {
       width: 46px;
-      height: 14px;
+      height: 20px;
+      flex-shrink: 0;
       display: flex;
       align-items: flex-end;
       justify-content: center;
+      position: relative;
     }
     .tape-indicator svg { display: block; }
+    .tape-pos-label {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      text-align: center;
+      font-size: 9px;
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace;
+      color: #c0bab0;
+      line-height: 1;
+      pointer-events: none;
+      user-select: none;
+    }
 
     .tape-cell.head-pos {
       border-color: #c88a30;
@@ -702,17 +720,24 @@
   let alphabet = ['0', '1', '_'];
   let states   = ['q0', 'q_accept', 'q_reject'];
   let trans    = new Map();
-  const TAPE_LEN   = 10;
-  let tape         = Array(TAPE_LEN).fill('_');
+  let tape         = new Map();   // index → symbol; absent = '_'
   let currentState = 'q0';
   let headPos      = 0;
+  let tapeOffset   = 0;           // leftmost visible cell index
+
+  function readTape(i)     { return tape.get(i) ?? '_'; }
+  function writeTape(i, s) { tape.set(i, s); }
+  function getVisibleCells() {
+    const area = document.getElementById('tape-area');
+    return Math.max(5, Math.ceil(((area.clientWidth || 600) - 48) / 46));
+  }
 
   // ── Execution state ──────────────────────────────────────────────────────────
   let isRunning  = false;
   let execTimer  = null;
   let execSpeed  = 5;          // 1–10
   let history    = [];         // [{tape, headPos, currentState}]
-  let haltReason = null;       // null | 'accept' | 'reject' | 'undefined' | 'oob'
+  let haltReason = null;       // null | 'accept' | 'reject' | 'undefined'
 
   function execDelay() { return Math.round(2000 - (execSpeed - 1) * 210); }  // 2000–110 ms
 
@@ -764,9 +789,6 @@
     } else if (haltReason === 'undefined') {
       el.textContent = 'Undefined transition';
       el.className   = 'exec-status undefined';
-    } else if (haltReason === 'oob') {
-      el.textContent = 'Head out of bounds';
-      el.className   = 'exec-status undefined';
     } else if (history.length > 0) {
       el.textContent = 'Paused';
       el.className   = 'exec-status';
@@ -782,7 +804,7 @@
       return false;
     }
 
-    const readSym = tape[headPos];
+    const readSym = readTape(headPos);
     const t = trans.get(currentState)?.get(readSym);
 
     if (!t || t.nextState === null || t.write === null || t.move === null) {
@@ -791,18 +813,16 @@
     }
 
     // Save snapshot for undo
-    history.push({ tape: [...tape], headPos, currentState });
+    history.push({ tape: new Map(tape), headPos, currentState, tapeOffset });
 
-    tape[headPos]  = t.write;
-    currentState   = t.nextState;
-    headPos       += t.move === 'R' ? 1 : -1;
+    writeTape(headPos, t.write);
+    currentState = t.nextState;
+    headPos     += t.move === 'R' ? 1 : -1;
 
-    if (headPos < 0 || headPos >= TAPE_LEN) {
-      haltReason = 'oob';
-      headPos = Math.max(0, Math.min(TAPE_LEN - 1, headPos));
-      renderTape();
-      renderGraph();
-      return false;
+    // Auto-scroll viewport to keep head visible
+    const vis = getVisibleCells();
+    if (headPos < tapeOffset || headPos >= tapeOffset + vis) {
+      tapeOffset = headPos - Math.floor(vis / 2);
     }
 
     if (TERMINAL.has(currentState)) {
@@ -853,9 +873,10 @@
   function stepBackward() {
     if (isRunning || history.length === 0) return;
     const snap = history.pop();
-    tape         = snap.tape;
+    tape         = new Map(snap.tape);
     headPos      = snap.headPos;
     currentState = snap.currentState;
+    tapeOffset   = snap.tapeOffset;
     haltReason   = null;
     renderTape();
     renderGraph();
@@ -868,13 +889,15 @@
     currentState = states.find(s => !TERMINAL.has(s)) || 'q0';
     haltReason   = null;
     history      = [];
+    tapeOffset   = 0;
     renderTape();
     renderGraph();
     updateControls();
   }
 
   function resetTape() {
-    tape = Array(TAPE_LEN).fill('_');
+    tape = new Map();
+    tapeOffset = 0;
     renderTape();
   }
 
@@ -925,7 +948,7 @@
     trans.forEach(stMap => stMap.delete(sym));
     // reset tape cells that used the removed symbol
     const fallback = alphabet.includes('_') ? '_' : alphabet[0];
-    tape = tape.map(s => s === sym ? fallback : s);
+    tape.forEach((s, idx) => { if (s === sym) tape.set(idx, fallback); });
     render();
   }
 
@@ -937,7 +960,7 @@
     if (idx === -1) return false;
     alphabet[idx] = newSym;
     // update tape cells using the old symbol
-    tape = tape.map(s => s === oldSym ? newSym : s);
+    tape.forEach((s, i) => { if (s === oldSym) tape.set(i, newSym); });
     // rebuild trans maps with updated key
     trans.forEach(stMap => {
       if (stMap.has(oldSym)) {
@@ -1016,16 +1039,29 @@
   }
 
   function renderTape() {
+    const vis = getVisibleCells();
+
     // Indicator row
     const indRow = document.getElementById('tape-indicator-row');
     indRow.innerHTML = '';
-    for (let i = 0; i < TAPE_LEN; i++) {
+    for (let i = 0; i < vis; i++) {
+      const idx = tapeOffset + i;
       const slot = document.createElement('div');
       slot.className = 'tape-indicator';
-      if (i === headPos) {
-        slot.innerHTML = `<svg width="12" height="10" viewBox="0 0 12 10">
-          <polygon points="6,10 0,0 12,0" fill="#c88a30"/>
-        </svg>`;
+      if (idx % 5 === 0) {
+        const lbl = document.createElement('span');
+        lbl.className = 'tape-pos-label';
+        lbl.textContent = idx;
+        slot.appendChild(lbl);
+      }
+      if (idx === headPos) {
+        const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        arrow.setAttribute('width', '12'); arrow.setAttribute('height', '10');
+        arrow.setAttribute('viewBox', '0 0 12 10');
+        const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        poly.setAttribute('points', '6,10 0,0 12,0'); poly.setAttribute('fill', '#c88a30');
+        arrow.appendChild(poly);
+        slot.appendChild(arrow);
       }
       indRow.appendChild(slot);
     }
@@ -1033,9 +1069,12 @@
     const container = document.getElementById('tape-cells');
     container.innerHTML = '';
 
-    tape.forEach((sym, i) => {
+    for (let i = 0; i < vis; i++) {
+      const idx = tapeOffset + i;
+      const sym = readTape(idx);
+
       const cell = document.createElement('div');
-      cell.className = 'tape-cell' + (i === headPos ? ' head-pos' : '');
+      cell.className = 'tape-cell' + (idx === headPos ? ' head-pos' : '');
 
       const span = document.createElement('span');
       span.className = 'tape-symbol' + (sym === '_' ? ' blank' : '');
@@ -1052,7 +1091,7 @@
       });
 
       select.addEventListener('change', () => {
-        tape[i] = select.value;
+        writeTape(idx, select.value);
         span.textContent = select.value;
         span.className = 'tape-symbol' + (select.value === '_' ? ' blank' : '');
       });
@@ -1060,7 +1099,7 @@
       cell.appendChild(span);
       cell.appendChild(select);
       container.appendChild(cell);
-    });
+    }
   }
 
   // SVG icons
@@ -1525,6 +1564,62 @@
     });
     document.addEventListener('mouseup', () => { document.body.classList.remove('resizing-right'); });
   })();
+
+  // ── Tape drag (infinite scroll) ──────────────────────────────────────────────
+  (function () {
+    let dragStart = null;
+    const CELL_W  = 46;
+
+    function startDrag(e) {
+      if (e.button !== 0) return;
+      dragStart = { x: e.clientX, offset: tapeOffset };
+    }
+
+    document.getElementById('tape-indicator-row').addEventListener('mousedown', e => {
+      e.preventDefault();
+      startDrag(e);
+    });
+    document.getElementById('tape-cells').addEventListener('mousedown', e => {
+      startDrag(e);
+    });
+
+    document.addEventListener('mousemove', e => {
+      if (!dragStart) return;
+      const dx = dragStart.x - e.clientX;
+      const newOffset = dragStart.offset + Math.round(dx / CELL_W);
+      if (newOffset !== tapeOffset) {
+        tapeOffset = newOffset;
+        document.getElementById('tape-cells').classList.add('tape-dragging');
+        renderTape();
+      }
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (!dragStart) return;
+      dragStart = null;
+      document.getElementById('tape-cells').classList.remove('tape-dragging');
+    });
+
+    // Two-finger trackpad horizontal swipe
+    let wheelAccum = 0;
+    document.getElementById('tape-area').addEventListener('wheel', e => {
+      const isHorizontal = Math.abs(e.deltaX) >= Math.abs(e.deltaY);
+      if (!isHorizontal) return;
+      e.preventDefault();
+      wheelAccum += e.deltaX;
+      const cells = Math.trunc(wheelAccum / CELL_W);
+      if (cells !== 0) {
+        tapeOffset += cells;
+        wheelAccum -= cells * CELL_W;
+        renderTape();
+      }
+    }, { passive: false });
+  })();
+
+  // Re-render tape when tape-area is resized (panel drag, window resize)
+  if (window.ResizeObserver) {
+    new ResizeObserver(() => renderTape()).observe(document.getElementById('tape-area'));
+  }
 
   // ── Boot ────────────────────────────────────────────────────────────────────
   render();
