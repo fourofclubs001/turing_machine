@@ -586,6 +586,25 @@
       gap: 8px;
     }
     #panel-header-actions { display: flex; gap: 4px; flex-shrink: 0; margin-top: 1px; }
+    .btn-reset-machine {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 10px;
+      background: transparent;
+      border: 1px solid #e8e5e0;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 500;
+      color: #b0aba3;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-reset-machine:hover {
+      background: #fff0f0;
+      border-color: #fca5a5;
+      color: #dc2626;
+    }
   </style>
 </head>
 <body>
@@ -611,7 +630,10 @@
         </button>
       </div>
     </div>
-    <p>Define alphabet, states, and transitions</p>
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-top:3px;">
+      <p>Define alphabet, states, and transitions</p>
+      <button class="btn-reset-machine" onclick="resetMachine()">Reset machine</button>
+    </div>
   </div>
   <div id="panel-body">
 
@@ -1643,6 +1665,22 @@
   // Re-render tape when tape-area is resized (panel drag, window resize)
   if (window.ResizeObserver) {
     new ResizeObserver(() => renderTape()).observe(document.getElementById('tape-area'));
+  }
+
+  // ── Reset machine ───────────────────────────────────────────────────────────
+  function resetMachine() {
+    if (!confirm('Reset the machine to its default state?\nThis will clear all states, transitions, and the alphabet.')) return;
+    pauseExec();
+    alphabet     = ['0', '1', '_'];
+    states       = ['q0', 'q_accept', 'q_reject'];
+    trans        = new Map();
+    nodePos      = new Map();
+    headPos      = 0;
+    tapeOffset   = 0;
+    currentState = 'q0';
+    haltReason   = null;
+    history      = [];
+    render();
   }
 
   // ── Save / Load ─────────────────────────────────────────────────────────────
