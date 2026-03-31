@@ -579,14 +579,38 @@
       width: 14px; height: 14px; border: none;
       border-radius: 50%; background: #1a1a1a; cursor: pointer;
     }
+    #panel-header-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    #panel-header-actions { display: flex; gap: 4px; flex-shrink: 0; margin-top: 1px; }
   </style>
 </head>
 <body>
+<input type="file" id="file-input" accept=".tm,.json" style="display:none">
 
 <div id="panel">
   <div id="resize-handle"></div>
   <div id="panel-header">
-    <h1>Turing Machine Designer</h1>
+    <div id="panel-header-top">
+      <h1>Turing Machine Designer</h1>
+      <div id="panel-header-actions">
+        <button class="btn-icon" title="Save machine" onclick="saveMachine()">
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+            <path d="M7.5 1v9M4 7l3.5 3.5L11 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M2 12h11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+        <button class="btn-icon" title="Load machine" onclick="loadMachine()">
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+            <path d="M7.5 10V1M4 4l3.5-3.5L11 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M2 12h11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+    </div>
     <p>Define alphabet, states, and transitions</p>
   </div>
   <div id="panel-body">
@@ -1619,6 +1643,82 @@
   // Re-render tape when tape-area is resized (panel drag, window resize)
   if (window.ResizeObserver) {
     new ResizeObserver(() => renderTape()).observe(document.getElementById('tape-area'));
+  }
+
+  // ── Save / Load ─────────────────────────────────────────────────────────────
+  function saveMachine() {
+    const transitions = {};
+    trans.forEach((stMap, state) => {
+      transitions[state] = {};
+      stMap.forEach((t, sym) => { transitions[state][sym] = { ...t }; });
+    });
+
+    const positions = {};
+    nodePos.forEach((pos, state) => { positions[state] = { ...pos }; });
+
+    const data = {
+      version: 1,
+      alphabet: [...alphabet],
+      states:   [...states],
+      transitions,
+      nodePositions: positions,
+    };
+
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url;
+    a.download = 'machine.tm';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function loadMachine() {
+    document.getElementById('file-input').click();
+  }
+
+  document.getElementById('file-input').addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = evt => {
+      try {
+        importMachine(JSON.parse(evt.target.result));
+      } catch (_) {
+        alert('Could not read file. Make sure it is a valid .tm file.');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  });
+
+  function importMachine(data) {
+    if (!Array.isArray(data.alphabet) || !Array.isArray(data.states) || !data.transitions) {
+      alert('Invalid Turing machine file.');
+      return;
+    }
+    pauseExec();
+
+    alphabet = data.alphabet;
+    states   = data.states;
+
+    trans = new Map();
+    Object.entries(data.transitions).forEach(([state, stObj]) => {
+      const stMap = new Map();
+      Object.entries(stObj).forEach(([sym, t]) => stMap.set(sym, { ...t }));
+      trans.set(state, stMap);
+    });
+
+    nodePos = new Map();
+    Object.entries(data.nodePositions || {}).forEach(([state, pos]) => {
+      nodePos.set(state, { ...pos });
+    });
+
+    currentState = states.find(s => !TERMINAL.has(s)) || 'q0';
+    haltReason   = null;
+    history      = [];
+
+    render();
   }
 
   // ── Boot ────────────────────────────────────────────────────────────────────
