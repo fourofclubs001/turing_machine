@@ -1,0 +1,1533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Turing Machine Designer</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body.resizing { cursor: col-resize; user-select: none; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: #f4f3f0;
+      color: #1a1a1a;
+      height: 100vh;
+      display: flex;
+      overflow: hidden;
+    }
+
+    /* ── Panel ─────────────────────────────────────────── */
+    #panel {
+      width: 380px;
+      min-width: 220px;
+      max-width: 70vw;
+      background: #ffffff;
+      border-right: none;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    /* ── Resize handle ─────────────────────────────────── */
+    #resize-handle {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 5px;
+      height: 100%;
+      cursor: col-resize;
+      z-index: 10;
+      background: transparent;
+      transition: background 0.15s;
+    }
+    #resize-handle::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 2px;
+      width: 1px;
+      height: 100%;
+      background: #e8e5e0;
+      transition: background 0.15s, width 0.15s, left 0.15s;
+    }
+    #resize-handle:hover::after,
+    body.resizing #resize-handle::after {
+      left: 1px;
+      width: 3px;
+      background: #c88a30;
+    }
+
+    #panel-header {
+      padding: 20px 20px 16px;
+      border-bottom: 1px solid #e8e5e0;
+      flex-shrink: 0;
+    }
+
+    #panel-header h1 {
+      font-size: 15px;
+      font-weight: 600;
+      color: #1a1a1a;
+      letter-spacing: -0.01em;
+    }
+
+    #panel-header p {
+      font-size: 12px;
+      color: #8a8680;
+      margin-top: 3px;
+    }
+
+    #panel-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 20px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* ── Scrollbar ─────────────────────────────────────── */
+    #panel-body::-webkit-scrollbar { width: 5px; }
+    #panel-body::-webkit-scrollbar-track { background: transparent; }
+    #panel-body::-webkit-scrollbar-thumb { background: #d4d0c8; border-radius: 3px; }
+
+    /* ── Section ───────────────────────────────────────── */
+    .section { display: flex; flex-direction: column; gap: 10px; }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 2px;
+    }
+
+    .section-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: #8a8680;
+    }
+
+    .divider {
+      height: 1px;
+      background: #e8e5e0;
+      flex-shrink: 0;
+    }
+
+    /* ── Item rows ─────────────────────────────────────── */
+    .item-list { display: flex; flex-direction: column; gap: 5px; }
+
+    .item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      background: #faf9f7;
+      border: 1px solid #e8e5e0;
+      border-radius: 8px;
+      transition: border-color 0.15s;
+    }
+
+    .item:focus-within {
+      border-color: #c0bab0;
+    }
+
+    .item-input {
+      flex: 1;
+      min-width: 0;
+      border: none;
+      background: transparent;
+      font-size: 13px;
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace;
+      color: #1a1a1a;
+      outline: none;
+    }
+
+    .item-input[readonly] {
+      cursor: default;
+      color: #5a5650;
+    }
+
+    /* ── Badges ────────────────────────────────────────── */
+    .badge {
+      font-size: 10px;
+      font-weight: 500;
+      padding: 2px 7px;
+      border-radius: 4px;
+      letter-spacing: 0.02em;
+      flex-shrink: 0;
+    }
+    .badge-accept {
+      background: #dcfce7;
+      color: #166534;
+    }
+    .badge-reject {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
+    /* ── Buttons ───────────────────────────────────────── */
+    .btn-add {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 10px;
+      background: transparent;
+      border: 1px solid #e8e5e0;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      color: #6b6963;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .btn-add:hover {
+      background: #faf9f7;
+      border-color: #c88a30;
+      color: #c88a30;
+    }
+
+    .btn-icon {
+      width: 22px;
+      height: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      color: #b0aba3;
+      transition: all 0.15s;
+      flex-shrink: 0;
+      padding: 0;
+    }
+    .btn-icon:hover { background: #f0ede8; color: #6b6963; }
+    .btn-icon.danger:hover { background: #fff0f0; color: #dc2626; }
+
+    /* ── Transitions ───────────────────────────────────── */
+    .state-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .state-group-label {
+      font-size: 11px;
+      font-weight: 600;
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace;
+      color: #8a8680;
+      padding: 6px 2px 2px;
+      letter-spacing: 0.03em;
+    }
+
+    .transition-row {
+      display: grid;
+      grid-template-columns: 1fr auto auto auto auto;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      background: #faf9f7;
+      border: 1px solid #e8e5e0;
+      border-radius: 8px;
+    }
+
+    .transition-cond {
+      font-size: 12px;
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace;
+      color: #5a5650;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .transition-arrow {
+      font-size: 12px;
+      color: #b0aba3;
+      flex-shrink: 0;
+    }
+
+    .t-select {
+      appearance: none;
+      -webkit-appearance: none;
+      border: 1px solid #e8e5e0;
+      background: #ffffff;
+      border-radius: 6px;
+      padding: 4px 24px 4px 8px;
+      font-size: 12px;
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace;
+      color: #1a1a1a;
+      cursor: pointer;
+      outline: none;
+      background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23b0aba3' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 8px center;
+      transition: border-color 0.15s;
+    }
+    .t-select:focus { border-color: #c88a30; }
+    .t-select.empty {
+      color: #b0aba3;
+      border-style: dashed;
+    }
+    .t-select.empty:focus { border-style: solid; }
+
+    /* ── Empty state ───────────────────────────────────── */
+    .empty-hint {
+      font-size: 12px;
+      color: #b0aba3;
+      text-align: center;
+      padding: 12px 0;
+      font-style: italic;
+    }
+
+    /* ── Main area ─────────────────────────────────────── */
+    #main {
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      background: #f4f3f0;
+    }
+    body.resizing #main { pointer-events: none; }
+
+    #graph-area {
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* ── Tape ───────────────────────────────────────────── */
+    #tape-area {
+      flex-shrink: 0;
+      background: #ffffff;
+      border-top: 1px solid #e8e5e0;
+      padding: 12px 24px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    #tape-header { display: flex; align-items: center; justify-content: space-between; }
+
+    #tape-cells {
+      display: flex;
+      justify-content: center;
+    }
+
+    .tape-cell {
+      position: relative;
+      width: 46px;
+      height: 46px;
+      border: 1px solid #e8e5e0;
+      margin-right: -1px;
+      background: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.1s, border-color 0.1s;
+      z-index: 0;
+    }
+    .tape-cell:first-child { border-radius: 7px 0 0 7px; }
+    .tape-cell:last-child  { border-radius: 0 7px 7px 0; margin-right: 0; }
+    .tape-cell:hover { background: #faf9f7; border-color: #c0bab0; z-index: 1; }
+    .tape-cell:hover + .tape-cell { border-left-color: #c0bab0; }
+
+    .tape-symbol {
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace;
+      font-size: 17px;
+      color: #1a1a1a;
+      pointer-events: none;
+      position: relative;
+      z-index: 1;
+    }
+    .tape-symbol.blank { color: #c0bab0; }
+
+    #tape-indicator-row { display: flex; justify-content: center; }
+    .tape-indicator {
+      width: 46px;
+      height: 14px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    .tape-indicator svg { display: block; }
+
+    .tape-cell.head-pos {
+      border-color: #c88a30;
+      z-index: 1;
+      background: #fffbf5;
+    }
+    .tape-cell.head-pos + .tape-cell { border-left-color: #c88a30; }
+
+    .tape-cell-select {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+      border: none;
+      appearance: none;
+      -webkit-appearance: none;
+    }
+
+    /* ── Graph SVG ─────────────────────────────────────── */
+    #graph-svg { width: 100%; height: 100%; display: block; }
+
+    .node-group { cursor: grab; }
+    .node-group.dragging { cursor: grabbing; }
+    .node-circle {
+      fill: #ffffff;
+      stroke: #8a8680;
+      stroke-width: 1.5;
+      transition: stroke 0.12s, fill 0.12s;
+      filter: drop-shadow(0 1px 3px rgba(0,0,0,0.08));
+    }
+    .node-group:hover .node-circle  { stroke: #c88a30; }
+    .node-group.node-accept .node-circle { stroke: #16a34a; fill: #f0fdf4; }
+    .node-group.node-reject .node-circle { stroke: #dc2626; fill: #fff5f5; }
+    .node-group.node-accept:hover .node-circle { stroke: #15803d; }
+    .node-group.node-reject:hover .node-circle { stroke: #b91c1c; }
+    .node-inner { fill: none; stroke-width: 1.5; pointer-events: none; }
+    .node-group.node-accept .node-inner { stroke: #16a34a; }
+    .node-group.node-reject .node-inner { stroke: #dc2626; }
+    .node-label {
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace;
+      font-size: 11px;
+      fill: #1a1a1a;
+      text-anchor: middle;
+      dominant-baseline: central;
+      pointer-events: none;
+      user-select: none;
+    }
+    .node-group.node-accept .node-label { fill: #15803d; }
+    .node-group.node-reject .node-label { fill: #b91c1c; }
+    .node-group.node-current .node-circle { stroke: #c88a30; stroke-width: 2.5; }
+    .edge-path { fill: none; stroke: #c0bab0; stroke-width: 1.5; }
+    .edge-label-bg { fill: #faf9f7; stroke: #e8e5e0; stroke-width: 0.5; }
+    .edge-label-text {
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', Menlo, monospace;
+      font-size: 10px;
+      fill: #5a5650;
+      text-anchor: middle;
+      dominant-baseline: central;
+      pointer-events: none;
+      user-select: none;
+    }
+    /* ── Right panel ────────────────────────────────────── */
+    #right-panel {
+      width: 220px;
+      min-width: 160px;
+      max-width: 50vw;
+      background: #ffffff;
+      border-left: none;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      overflow-y: auto;
+      position: relative;
+    }
+
+    #right-resize-handle {
+      position: absolute;
+      top: 0; left: 0;
+      width: 5px; height: 100%;
+      cursor: col-resize;
+      z-index: 10;
+    }
+    #right-resize-handle::after {
+      content: '';
+      position: absolute;
+      top: 0; right: 2px;
+      width: 1px; height: 100%;
+      background: #e8e5e0;
+      transition: background 0.15s, width 0.15s, right 0.15s;
+    }
+    #right-resize-handle:hover::after,
+    body.resizing-right #right-resize-handle::after {
+      right: 1px; width: 3px;
+      background: #c88a30;
+    }
+    body.resizing-right { cursor: col-resize; user-select: none; }
+
+    #right-panel-header {
+      padding: 20px 20px 16px;
+      border-bottom: 1px solid #e8e5e0;
+      flex-shrink: 0;
+    }
+    #right-panel-header h1 { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+    #right-panel-header p  { font-size: 12px; color: #8a8680; margin-top: 3px; }
+
+    #right-panel-body {
+      padding: 16px 16px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      flex: 1;
+    }
+
+    .ctrl-section { display: flex; flex-direction: column; gap: 8px; }
+
+    /* ── Control buttons ─────────────────────────────────── */
+    .btn-ctrl {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      width: 100%;
+      padding: 9px 12px;
+      border-radius: 8px;
+      border: 1px solid #e8e5e0;
+      background: #faf9f7;
+      font-size: 13px;
+      font-weight: 500;
+      color: #1a1a1a;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+      font-family: inherit;
+    }
+    .btn-ctrl:hover:not(:disabled) { background: #f0ede8; border-color: #c0bab0; }
+    .btn-ctrl:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    .btn-ctrl.btn-play {
+      background: #1a1a1a;
+      color: #ffffff;
+      border-color: #1a1a1a;
+    }
+    .btn-ctrl.btn-play:hover:not(:disabled) { background: #333333; border-color: #333333; }
+    .btn-ctrl.btn-play.is-running {
+      background: #c88a30;
+      border-color: #c88a30;
+    }
+    .btn-ctrl.btn-play.is-running:hover { background: #b07828; border-color: #b07828; }
+
+    .btn-ctrl.btn-halt-accept { background: #dcfce7; border-color: #86efac; color: #166534; }
+    .btn-ctrl.btn-halt-reject { background: #fee2e2; border-color: #fca5a5; color: #991b1b; }
+
+    .btn-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    /* ── Status badge ────────────────────────────────────── */
+    .exec-status {
+      font-size: 12px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      text-align: center;
+      font-weight: 500;
+      background: #faf9f7;
+      border: 1px solid #e8e5e0;
+      color: #6b6963;
+    }
+    .exec-status.running   { background: #fffbf0; border-color: #f5d08a; color: #92600a; }
+    .exec-status.accepted  { background: #f0fdf4; border-color: #86efac; color: #166534; }
+    .exec-status.rejected  { background: #fff5f5; border-color: #fca5a5; color: #991b1b; }
+    .exec-status.undefined { background: #fdf4ff; border-color: #d8b4fe; color: #6b21a8; }
+
+    /* ── Speed slider ────────────────────────────────────── */
+    .speed-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: #8a8680;
+      margin-top: 1px;
+    }
+    input[type=range].speed-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 4px;
+      border-radius: 2px;
+      background: #e8e5e0;
+      outline: none;
+      cursor: pointer;
+    }
+    input[type=range].speed-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: #1a1a1a;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+    }
+    input[type=range].speed-slider::-webkit-slider-thumb:hover { background: #c88a30; transform: scale(1.15); }
+    input[type=range].speed-slider::-moz-range-thumb {
+      width: 14px; height: 14px; border: none;
+      border-radius: 50%; background: #1a1a1a; cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+<div id="panel">
+  <div id="resize-handle"></div>
+  <div id="panel-header">
+    <h1>Turing Machine Designer</h1>
+    <p>Define alphabet, states, and transitions</p>
+  </div>
+  <div id="panel-body">
+
+    <!-- Alphabet -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Alphabet</span>
+        <button class="btn-add" onclick="addSymbol()">
+          <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+            <path d="M5.5 1v9M1 5.5h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          Symbol
+        </button>
+      </div>
+      <div class="item-list" id="alphabet-list"></div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- States -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">States</span>
+        <button class="btn-add" onclick="promptAddState()">
+          <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+            <path d="M5.5 1v9M1 5.5h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          State
+        </button>
+      </div>
+      <div class="item-list" id="states-list"></div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Transitions -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Transitions</span>
+      </div>
+      <div id="transitions-container"></div>
+    </div>
+
+  </div>
+</div>
+
+<div id="main">
+  <div id="graph-area">
+    <svg id="graph-svg" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5"
+                markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#a0998f"/>
+        </marker>
+      </defs>
+      <g id="edges-layer"></g>
+      <g id="nodes-layer"></g>
+    </svg>
+  </div>
+  <div id="tape-area">
+    <div id="tape-header">
+      <span class="section-title">Tape</span>
+      <button class="btn-add" onclick="resetTape()">
+        <svg width="11" height="11" viewBox="0 0 13 13" fill="none">
+          <path d="M2 6.5A4.5 4.5 0 1 0 3.2 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M2 1.5v2.5h2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Reset tape
+      </button>
+    </div>
+    <div id="tape-indicator-row"></div>
+    <div id="tape-cells"></div>
+  </div>
+</div>
+
+<div id="right-panel">
+  <div id="right-resize-handle"></div>
+  <div id="right-panel-header">
+    <h1>Execution</h1>
+    <p>Control the Turing machine</p>
+  </div>
+  <div id="right-panel-body">
+
+    <!-- Status -->
+    <div class="ctrl-section">
+      <span class="section-title">Status</span>
+      <div class="exec-status" id="exec-status">Ready</div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Play / Reset -->
+    <div class="ctrl-section">
+      <button class="btn-ctrl btn-play" id="btn-play" onclick="togglePlay()"></button>
+      <button class="btn-ctrl" id="btn-reset" onclick="resetExecution()"></button>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Step controls -->
+    <div class="ctrl-section">
+      <span class="section-title">Step</span>
+      <div class="btn-row">
+        <button class="btn-ctrl" id="btn-step-back" onclick="stepBackward()"></button>
+        <button class="btn-ctrl" id="btn-step-fwd"  onclick="stepForward()"></button>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Speed -->
+    <div class="ctrl-section">
+      <span class="section-title">Speed</span>
+      <input type="range" class="speed-slider" id="speed-slider"
+             min="1" max="10" value="5" oninput="onSpeedChange(this.value)">
+      <div class="speed-row"><span>Slow</span><span>Fast</span></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // ── Data model ──────────────────────────────────────────────────────────────
+  const TERMINAL = new Set(['q_accept', 'q_reject']);
+
+  // alphabet: array of strings
+  // states:   array of strings (q_accept and q_reject always present)
+  // trans:    Map<state, Map<symbol, {nextState: string|null, write: string|null, move: 'L'|'R'|null}>>
+
+  let alphabet = ['0', '1', '_'];
+  let states   = ['q0', 'q_accept', 'q_reject'];
+  let trans    = new Map();
+  const TAPE_LEN   = 10;
+  let tape         = Array(TAPE_LEN).fill('_');
+  let currentState = 'q0';
+  let headPos      = 0;
+
+  // ── Execution state ──────────────────────────────────────────────────────────
+  let isRunning  = false;
+  let execTimer  = null;
+  let execSpeed  = 5;          // 1–10
+  let history    = [];         // [{tape, headPos, currentState}]
+  let haltReason = null;       // null | 'accept' | 'reject' | 'undefined' | 'oob'
+
+  function execDelay() { return Math.round(2000 - (execSpeed - 1) * 210); }  // 2000–110 ms
+
+  // SVG / text icons for buttons
+  const ICONS = {
+    play:  `<svg width="13" height="13" viewBox="0 0 13 13"><path d="M3 2l8 4.5L3 11V2z" fill="currentColor"/></svg>`,
+    pause: `<svg width="13" height="13" viewBox="0 0 13 13"><rect x="2" y="2" width="3.5" height="9" rx="1.2" fill="currentColor"/><rect x="7.5" y="2" width="3.5" height="9" rx="1.2" fill="currentColor"/></svg>`,
+    reset: `<svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M2 6.5A4.5 4.5 0 1 0 3.2 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M2 1.5v2.5h2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    back:  `<svg width="13" height="13" viewBox="0 0 13 13"><rect x="1.5" y="2" width="2.5" height="9" rx="1" fill="currentColor"/><path d="M10.5 2L4.5 6.5l6 4.5V2z" fill="currentColor"/></svg>`,
+    fwd:   `<svg width="13" height="13" viewBox="0 0 13 13"><rect x="9" y="2" width="2.5" height="9" rx="1" fill="currentColor"/><path d="M2.5 2l6 4.5-6 4.5V2z" fill="currentColor"/></svg>`,
+  };
+
+  function updateControls() {
+    const halted    = haltReason !== null;
+    const canBack   = history.length > 0 && !isRunning;
+    const canFwd    = !halted && !isRunning;
+    const canPlay   = !halted;
+
+    // Play button
+    const btnPlay = document.getElementById('btn-play');
+    btnPlay.innerHTML = isRunning
+      ? `${ICONS.pause} Pause`
+      : `${ICONS.play} Play`;
+    btnPlay.classList.toggle('is-running', isRunning);
+    btnPlay.disabled = !canPlay;
+
+    // Reset
+    document.getElementById('btn-reset').innerHTML = `${ICONS.reset} Reset`;
+
+    // Steps
+    const btnBack = document.getElementById('btn-step-back');
+    const btnFwd  = document.getElementById('btn-step-fwd');
+    btnBack.innerHTML = `${ICONS.back} Back`;
+    btnFwd.innerHTML  = `Forward ${ICONS.fwd}`;
+    btnBack.disabled  = !canBack;
+    btnFwd.disabled   = !canFwd;
+
+    // Status
+    const el = document.getElementById('exec-status');
+    if (isRunning) {
+      el.textContent = 'Running…';
+      el.className   = 'exec-status running';
+    } else if (haltReason === 'accept') {
+      el.textContent = 'Accepted';
+      el.className   = 'exec-status accepted';
+    } else if (haltReason === 'reject') {
+      el.textContent = 'Rejected';
+      el.className   = 'exec-status rejected';
+    } else if (haltReason === 'undefined') {
+      el.textContent = 'Undefined transition';
+      el.className   = 'exec-status undefined';
+    } else if (haltReason === 'oob') {
+      el.textContent = 'Head out of bounds';
+      el.className   = 'exec-status undefined';
+    } else if (history.length > 0) {
+      el.textContent = 'Paused';
+      el.className   = 'exec-status';
+    } else {
+      el.textContent = 'Ready';
+      el.className   = 'exec-status';
+    }
+  }
+
+  function tmStep() {
+    if (TERMINAL.has(currentState)) {
+      haltReason = currentState === 'q_accept' ? 'accept' : 'reject';
+      return false;
+    }
+
+    const readSym = tape[headPos];
+    const t = trans.get(currentState)?.get(readSym);
+
+    if (!t || t.nextState === null || t.write === null || t.move === null) {
+      haltReason = 'undefined';
+      return false;
+    }
+
+    // Save snapshot for undo
+    history.push({ tape: [...tape], headPos, currentState });
+
+    tape[headPos]  = t.write;
+    currentState   = t.nextState;
+    headPos       += t.move === 'R' ? 1 : -1;
+
+    if (headPos < 0 || headPos >= TAPE_LEN) {
+      haltReason = 'oob';
+      headPos = Math.max(0, Math.min(TAPE_LEN - 1, headPos));
+      renderTape();
+      renderGraph();
+      return false;
+    }
+
+    if (TERMINAL.has(currentState)) {
+      haltReason = currentState === 'q_accept' ? 'accept' : 'reject';
+    }
+
+    renderTape();
+    renderGraph();
+    return haltReason === null;
+  }
+
+  function startExec() {
+    if (haltReason !== null) return;
+    isRunning = true;
+    updateControls();
+    const tick = () => {
+      const canContinue = tmStep();
+      updateControls();
+      if (canContinue && isRunning) {
+        execTimer = setTimeout(tick, execDelay());
+      } else {
+        isRunning = false;
+        clearTimeout(execTimer);
+        execTimer = null;
+        updateControls();
+      }
+    };
+    execTimer = setTimeout(tick, execDelay());
+  }
+
+  function pauseExec() {
+    isRunning = false;
+    clearTimeout(execTimer);
+    execTimer = null;
+    updateControls();
+  }
+
+  function togglePlay() {
+    isRunning ? pauseExec() : startExec();
+  }
+
+  function stepForward() {
+    if (isRunning || haltReason !== null) return;
+    tmStep();
+    updateControls();
+  }
+
+  function stepBackward() {
+    if (isRunning || history.length === 0) return;
+    const snap = history.pop();
+    tape         = snap.tape;
+    headPos      = snap.headPos;
+    currentState = snap.currentState;
+    haltReason   = null;
+    renderTape();
+    renderGraph();
+    updateControls();
+  }
+
+  function resetExecution() {
+    pauseExec();
+    headPos      = 0;
+    currentState = states.find(s => !TERMINAL.has(s)) || 'q0';
+    haltReason   = null;
+    history      = [];
+    renderTape();
+    renderGraph();
+    updateControls();
+  }
+
+  function resetTape() {
+    tape = Array(TAPE_LEN).fill('_');
+    renderTape();
+  }
+
+  function onSpeedChange(val) {
+    execSpeed = parseInt(val);
+    if (isRunning) {
+      // Restart timer with new interval
+      clearTimeout(execTimer);
+      execTimer = null;
+      const tick = () => {
+        const canContinue = tmStep();
+        updateControls();
+        if (canContinue && isRunning) execTimer = setTimeout(tick, execDelay());
+        else { isRunning = false; execTimer = null; updateControls(); }
+      };
+      execTimer = setTimeout(tick, execDelay());
+    }
+  }
+
+  function ensureTransitions() {
+    states.forEach(state => {
+      if (TERMINAL.has(state)) return;
+      if (!trans.has(state)) trans.set(state, new Map());
+      const stMap = trans.get(state);
+      alphabet.forEach(sym => {
+        if (!stMap.has(sym)) stMap.set(sym, { nextState: null, write: null, move: null });
+      });
+    });
+  }
+
+  // ── Alphabet operations ─────────────────────────────────────────────────────
+  function addSymbol() {
+    const raw = prompt('New symbol:');
+    if (raw === null) return;
+    const sym = raw.trim();
+    if (!sym) return;
+    if (alphabet.includes(sym)) { alert(`"${sym}" already in alphabet.`); return; }
+    alphabet.push(sym);
+    trans.forEach(stMap => {
+      if (!stMap.has(sym)) stMap.set(sym, { write: null, move: null });
+    });
+    render();
+  }
+
+  function deleteSymbol(sym) {
+    if (alphabet.length <= 1) { alert('At least one symbol is required.'); return; }
+    alphabet = alphabet.filter(s => s !== sym);
+    trans.forEach(stMap => stMap.delete(sym));
+    // reset tape cells that used the removed symbol
+    const fallback = alphabet.includes('_') ? '_' : alphabet[0];
+    tape = tape.map(s => s === sym ? fallback : s);
+    render();
+  }
+
+  function commitSymbolRename(oldSym, newSym) {
+    newSym = newSym.trim();
+    if (!newSym || newSym === oldSym) return false;
+    if (alphabet.includes(newSym)) { alert(`"${newSym}" already in alphabet.`); return false; }
+    const idx = alphabet.indexOf(oldSym);
+    if (idx === -1) return false;
+    alphabet[idx] = newSym;
+    // update tape cells using the old symbol
+    tape = tape.map(s => s === oldSym ? newSym : s);
+    // rebuild trans maps with updated key
+    trans.forEach(stMap => {
+      if (stMap.has(oldSym)) {
+        const v = stMap.get(oldSym);
+        if (v.write === oldSym) v.write = newSym;
+        // re-insert with new key preserving order
+        const entries = [...stMap.entries()];
+        stMap.clear();
+        entries.forEach(([k, val]) => {
+          stMap.set(k === oldSym ? newSym : k, val);
+        });
+      }
+      // update write values referencing old symbol in other entries
+      stMap.forEach(val => {
+        if (val.write === oldSym) val.write = newSym;
+      });
+    });
+    render();
+    return true;
+  }
+
+  // ── State operations ────────────────────────────────────────────────────────
+  function promptAddState() {
+    const raw = prompt('New state name:');
+    if (raw === null) return;
+    const name = raw.trim();
+    if (!name) return;
+    if (states.includes(name)) { alert(`State "${name}" already exists.`); return; }
+    states.push(name);
+    trans.set(name, new Map());
+    alphabet.forEach(sym => trans.get(name).set(sym, { nextState: null, write: null, move: null }));
+    render();
+  }
+
+  function deleteState(state) {
+    if (TERMINAL.has(state)) return;
+    states = states.filter(s => s !== state);
+    trans.delete(state);
+    trans.forEach(stMap => stMap.forEach(t => { if (t.nextState === state) t.nextState = null; }));
+    if (currentState === state) currentState = states.find(s => !TERMINAL.has(s)) || 'q0';
+    render();
+  }
+
+  function commitStateRename(oldName, newName) {
+    newName = newName.trim();
+    if (!newName || newName === oldName) return false;
+    if (states.includes(newName)) { alert(`State "${newName}" already exists.`); return false; }
+    const idx = states.indexOf(oldName);
+    if (idx === -1) return false;
+    states[idx] = newName;
+    // move trans entry
+    if (trans.has(oldName)) {
+      trans.set(newName, trans.get(oldName));
+      trans.delete(oldName);
+    }
+    // carry over node position
+    if (nodePos.has(oldName)) {
+      nodePos.set(newName, nodePos.get(oldName));
+      nodePos.delete(oldName);
+    }
+    if (currentState === oldName) currentState = newName;
+    trans.forEach(stMap => stMap.forEach(t => { if (t.nextState === oldName) t.nextState = newName; }));
+    render();
+    return true;
+  }
+
+  // ── Render ──────────────────────────────────────────────────────────────────
+  function render() {
+    ensureTransitions();
+    renderAlphabet();
+    renderStates();
+    renderTransitions();
+    renderGraph();
+    renderTape();
+    updateControls();
+  }
+
+  function renderTape() {
+    // Indicator row
+    const indRow = document.getElementById('tape-indicator-row');
+    indRow.innerHTML = '';
+    for (let i = 0; i < TAPE_LEN; i++) {
+      const slot = document.createElement('div');
+      slot.className = 'tape-indicator';
+      if (i === headPos) {
+        slot.innerHTML = `<svg width="12" height="10" viewBox="0 0 12 10">
+          <polygon points="6,10 0,0 12,0" fill="#c88a30"/>
+        </svg>`;
+      }
+      indRow.appendChild(slot);
+    }
+
+    const container = document.getElementById('tape-cells');
+    container.innerHTML = '';
+
+    tape.forEach((sym, i) => {
+      const cell = document.createElement('div');
+      cell.className = 'tape-cell' + (i === headPos ? ' head-pos' : '');
+
+      const span = document.createElement('span');
+      span.className = 'tape-symbol' + (sym === '_' ? ' blank' : '');
+      span.textContent = sym;
+
+      const select = document.createElement('select');
+      select.className = 'tape-cell-select';
+      alphabet.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s;
+        opt.textContent = s;
+        if (s === sym) opt.selected = true;
+        select.appendChild(opt);
+      });
+
+      select.addEventListener('change', () => {
+        tape[i] = select.value;
+        span.textContent = select.value;
+        span.className = 'tape-symbol' + (select.value === '_' ? ' blank' : '');
+      });
+
+      cell.appendChild(span);
+      cell.appendChild(select);
+      container.appendChild(cell);
+    });
+  }
+
+  // SVG icons
+  const ICON_DELETE = `<svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+    <path d="M2 2l9 9M11 2l-9 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+  </svg>`;
+
+  function renderAlphabet() {
+    const list = document.getElementById('alphabet-list');
+    list.innerHTML = '';
+
+    if (alphabet.length === 0) {
+      list.innerHTML = '<p class="empty-hint">No symbols defined.</p>';
+      return;
+    }
+
+    alphabet.forEach(sym => {
+      const row = document.createElement('div');
+      row.className = 'item';
+
+      const input = document.createElement('input');
+      input.className = 'item-input';
+      input.value = sym;
+      input.spellcheck = false;
+      let snapshot = sym;
+
+      input.addEventListener('focus', () => { snapshot = input.value; });
+      input.addEventListener('blur', () => {
+        if (!commitSymbolRename(snapshot, input.value)) {
+          input.value = snapshot;
+        }
+      });
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+        if (e.key === 'Escape') { input.value = snapshot; input.blur(); }
+      });
+
+      const del = document.createElement('button');
+      del.className = 'btn-icon danger';
+      del.innerHTML = ICON_DELETE;
+      del.title = 'Remove symbol';
+      del.onclick = () => deleteSymbol(sym);
+
+      row.appendChild(input);
+      row.appendChild(del);
+      list.appendChild(row);
+    });
+  }
+
+  function renderStates() {
+    const list = document.getElementById('states-list');
+    list.innerHTML = '';
+
+    states.forEach(state => {
+      const terminal = TERMINAL.has(state);
+      const row = document.createElement('div');
+      row.className = 'item';
+
+      const input = document.createElement('input');
+      input.className = 'item-input';
+      input.value = state;
+      input.readOnly = terminal;
+      input.spellcheck = false;
+      input.title = terminal ? 'This state cannot be renamed.' : 'Click to rename';
+
+      if (!terminal) {
+        let snapshot = state;
+        input.addEventListener('focus', () => { snapshot = input.value; });
+        input.addEventListener('blur', () => {
+          if (!commitStateRename(snapshot, input.value)) {
+            input.value = snapshot;
+          }
+        });
+        input.addEventListener('keydown', e => {
+          if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+          if (e.key === 'Escape') { input.value = snapshot; input.blur(); }
+        });
+      }
+
+      row.appendChild(input);
+
+      if (terminal) {
+        const badge = document.createElement('span');
+        badge.className = `badge ${state === 'q_accept' ? 'badge-accept' : 'badge-reject'}`;
+        badge.textContent = state === 'q_accept' ? 'accept' : 'reject';
+        row.appendChild(badge);
+      } else {
+        const del = document.createElement('button');
+        del.className = 'btn-icon danger';
+        del.innerHTML = ICON_DELETE;
+        del.title = 'Remove state';
+        del.onclick = () => deleteState(state);
+        row.appendChild(del);
+      }
+
+      list.appendChild(row);
+    });
+  }
+
+  function renderTransitions() {
+    const container = document.getElementById('transitions-container');
+    container.innerHTML = '';
+
+    const active = states.filter(s => !TERMINAL.has(s));
+
+    if (active.length === 0 || alphabet.length === 0) {
+      container.innerHTML = '<p class="empty-hint">Add a state and symbols to define transitions.</p>';
+      return;
+    }
+
+    active.forEach(state => {
+      const stMap = trans.get(state);
+
+      const group = document.createElement('div');
+      group.className = 'state-group';
+
+      const label = document.createElement('div');
+      label.className = 'state-group-label';
+      label.textContent = state;
+      group.appendChild(label);
+
+      alphabet.forEach(sym => {
+        const t = stMap?.get(sym) || { nextState: null, write: null, move: null };
+        const row = createTransitionRow(state, sym, t);
+        group.appendChild(row);
+      });
+
+      container.appendChild(group);
+    });
+  }
+
+  function createTransitionRow(state, sym, t) {
+    const row = document.createElement('div');
+    row.className = 'transition-row';
+
+    // Condition label
+    const cond = document.createElement('span');
+    cond.className = 'transition-cond';
+    cond.textContent = `(${state}, ${sym})`;
+    cond.title = `State: ${state}  |  Read: ${sym}`;
+
+    const arrow = document.createElement('span');
+    arrow.className = 'transition-arrow';
+    arrow.textContent = '→';
+
+    // Next-state select
+    const nextEl = document.createElement('select');
+    nextEl.className = `t-select${t.nextState === null ? ' empty' : ''}`;
+    nextEl.title = 'Next state';
+    appendOpt(nextEl, '__none__', 'state…', t.nextState === null);
+    states.forEach(s => appendOpt(nextEl, s, s, t.nextState === s));
+    nextEl.value = t.nextState ?? '__none__';
+    nextEl.addEventListener('change', () => {
+      const v = nextEl.value === '__none__' ? null : nextEl.value;
+      trans.get(state)?.get(sym) && (trans.get(state).get(sym).nextState = v);
+      nextEl.classList.toggle('empty', v === null);
+      renderGraph();
+    });
+
+    // Write select
+    const writeEl = document.createElement('select');
+    writeEl.className = `t-select${t.write === null ? ' empty' : ''}`;
+    writeEl.title = 'Symbol to write';
+    appendOpt(writeEl, '__none__', 'write…', t.write === null);
+    alphabet.forEach(s => appendOpt(writeEl, s, s, t.write === s));
+    writeEl.value = t.write ?? '__none__';
+    writeEl.addEventListener('change', () => {
+      const v = writeEl.value === '__none__' ? null : writeEl.value;
+      trans.get(state)?.get(sym) && (trans.get(state).get(sym).write = v);
+      writeEl.classList.toggle('empty', v === null);
+      renderGraph();
+    });
+
+    // Move select
+    const moveEl = document.createElement('select');
+    moveEl.className = `t-select${t.move === null ? ' empty' : ''}`;
+    moveEl.title = 'Head direction';
+    appendOpt(moveEl, '__none__', 'move…', t.move === null);
+    appendOpt(moveEl, 'L', '← L', t.move === 'L');
+    appendOpt(moveEl, 'R', '→ R', t.move === 'R');
+    moveEl.value = t.move ?? '__none__';
+    moveEl.addEventListener('change', () => {
+      const v = moveEl.value === '__none__' ? null : moveEl.value;
+      trans.get(state)?.get(sym) && (trans.get(state).get(sym).move = v);
+      moveEl.classList.toggle('empty', v === null);
+      renderGraph();
+    });
+
+    row.appendChild(cond);
+    row.appendChild(arrow);
+    row.appendChild(nextEl);
+    row.appendChild(writeEl);
+    row.appendChild(moveEl);
+    return row;
+  }
+
+  function appendOpt(select, value, text, selected) {
+    const opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = text;
+    if (selected) opt.selected = true;
+    select.appendChild(opt);
+  }
+
+  // ── Graph ────────────────────────────────────────────────────────────────────
+  const NODE_R  = 28;
+  const NODE_R2 = 22; // inner ring radius for terminal states
+  let nodePos    = new Map(); // state -> {x, y}
+  let activeDrag = null;      // {state, ox, oy}
+
+  function syncNodePositions() {
+    const svg = document.getElementById('graph-svg');
+    const w = svg.clientWidth  || 700;
+    const h = svg.clientHeight || 450;
+
+    // Drop positions for deleted states
+    for (const s of [...nodePos.keys()]) {
+      if (!states.includes(s)) nodePos.delete(s);
+    }
+
+    const unplaced = states.filter(s => !nodePos.has(s));
+    if (unplaced.length === 0) return;
+
+    if (nodePos.size === 0) {
+      // Initial layout: all states in a circle
+      const cx = w / 2, cy = h / 2;
+      const r  = Math.min(w, h) * 0.32;
+      states.forEach((s, i) => {
+        const a = (i / states.length) * 2 * Math.PI - Math.PI / 2;
+        nodePos.set(s, { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) });
+      });
+    } else {
+      // New state: random position near centre
+      const cx = w / 2, cy = h / 2;
+      unplaced.forEach(s => {
+        const a = Math.random() * 2 * Math.PI;
+        const r = 80 + Math.random() * 100;
+        nodePos.set(s, { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) });
+      });
+    }
+  }
+
+  function getEdgeGroups() {
+    const map = new Map();
+    trans.forEach((stMap, from) => {
+      stMap.forEach((t, readSym) => {
+        if (t.nextState === null || t.write === null || t.move === null) return;
+        const key = `${from}|||${t.nextState}`;
+        if (!map.has(key)) map.set(key, { from, to: t.nextState, labels: [] });
+        map.get(key).labels.push(`${readSym} | ${t.write}, ${t.move}`);
+      });
+    });
+    return map;
+  }
+
+  function computeEdgeGeometry(from, to, curved) {
+    const fp = nodePos.get(from);
+    const tp = nodePos.get(to);
+    if (!fp || !tp) return null;
+
+    // Self-loop: cubic bezier going above the node
+    if (from === to) {
+      const sp = 16, lh = 58;
+      return {
+        d: `M ${fp.x - sp} ${fp.y - NODE_R} `
+         + `C ${fp.x - sp*2} ${fp.y - NODE_R - lh} `
+         +   `${fp.x + sp*2} ${fp.y - NODE_R - lh} `
+         +   `${fp.x + sp} ${fp.y - NODE_R}`,
+        lx: fp.x,
+        ly: fp.y - NODE_R - lh * 0.88
+      };
+    }
+
+    const dx = tp.x - fp.x, dy = tp.y - fp.y;
+    const len = Math.sqrt(dx*dx + dy*dy);
+    if (len < 1) return null;
+
+    const ux = dx/len, uy = dy/len;
+    const nx = -uy,  ny = ux;   // left-hand normal
+
+    const sx = fp.x + ux * NODE_R,        sy = fp.y + uy * NODE_R;
+    const ex = tp.x - ux * (NODE_R + 1),  ey = tp.y - uy * (NODE_R + 1);
+
+    if (curved) {
+      const off = 44;
+      const mx = (sx+ex)/2 + nx*off, my = (sy+ey)/2 + ny*off;
+      return {
+        d: `M ${sx} ${sy} Q ${mx} ${my} ${ex} ${ey}`,
+        lx: (sx+ex)/2 + nx*(off*0.82),
+        ly: (sy+ey)/2 + ny*(off*0.82)
+      };
+    } else {
+      return {
+        d: `M ${sx} ${sy} L ${ex} ${ey}`,
+        lx: (sx+ex)/2 + nx*14,
+        ly: (sy+ey)/2 + ny*14
+      };
+    }
+  }
+
+  function svgEl(tag, attrs = {}) {
+    const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    Object.entries(attrs).forEach(([k, v]) => el.setAttribute(k, v));
+    return el;
+  }
+
+  function clearLayer(el) {
+    while (el.firstChild) el.removeChild(el.firstChild);
+  }
+
+  function renderGraph() {
+    syncNodePositions();
+    const edgesLayer = document.getElementById('edges-layer');
+    const nodesLayer = document.getElementById('nodes-layer');
+    clearLayer(edgesLayer);
+    clearLayer(nodesLayer);
+
+    const edgeMap = getEdgeGroups();
+
+    // ── Edges ──────────────────────────────────────────
+    edgeMap.forEach(({ from, to, labels }) => {
+      const bidir = from !== to && edgeMap.has(`${to}|||${from}`);
+      const geo   = computeEdgeGeometry(from, to, bidir);
+      if (!geo) return;
+
+      const g = svgEl('g');
+      g.appendChild(svgEl('path', { d: geo.d, class: 'edge-path', 'marker-end': 'url(#arrowhead)' }));
+
+      // Label box
+      const lineH = 13, charW = 6.5, padX = 7, padY = 5;
+      const maxLen = Math.max(...labels.map(l => l.length));
+      const bgW = maxLen * charW + padX * 2;
+      const bgH = labels.length * lineH + padY * 2;
+      const bgX = geo.lx - bgW / 2;
+      const bgY = geo.ly - bgH / 2;
+
+      g.appendChild(svgEl('rect', { x: bgX, y: bgY, width: bgW, height: bgH, rx: 3, class: 'edge-label-bg' }));
+
+      labels.forEach((lbl, i) => {
+        const t = svgEl('text', {
+          class: 'edge-label-text',
+          x: geo.lx,
+          y: bgY + padY + i * lineH + lineH / 2
+        });
+        t.textContent = lbl;
+        g.appendChild(t);
+      });
+
+      edgesLayer.appendChild(g);
+    });
+
+    // ── Nodes ──────────────────────────────────────────
+    states.forEach(state => {
+      const pos = nodePos.get(state);
+      if (!pos) return;
+
+      const isAccept = state === 'q_accept';
+      const isReject = state === 'q_reject';
+
+      const isCurrent = state === currentState;
+
+      let cls = 'node-group';
+      if (isAccept)  cls += ' node-accept';
+      if (isReject)  cls += ' node-reject';
+      if (isCurrent) cls += ' node-current';
+
+      const g = svgEl('g', { class: cls });
+
+      // Current-state pointer triangle above the node
+      if (isCurrent) {
+        const ts = 7;
+        const ty = pos.y - NODE_R - 4;
+        g.appendChild(svgEl('polygon', {
+          points: `${pos.x},${ty + ts} ${pos.x - ts},${ty - ts} ${pos.x + ts},${ty - ts}`,
+          fill: '#c88a30'
+        }));
+      }
+
+      g.appendChild(svgEl('circle', { cx: pos.x, cy: pos.y, r: NODE_R, class: 'node-circle' }));
+
+      if (isAccept || isReject) {
+        g.appendChild(svgEl('circle', { cx: pos.x, cy: pos.y, r: NODE_R2, class: 'node-inner' }));
+      }
+
+      const label = svgEl('text', { x: pos.x, y: pos.y, class: 'node-label' });
+      label.textContent = state;
+      g.appendChild(label);
+
+      // Drag
+      g.addEventListener('mousedown', e => {
+        if (document.body.classList.contains('resizing')) return;
+        e.stopPropagation();
+        const svg = document.getElementById('graph-svg');
+        const pt  = svgCursorPoint(svg, e);
+        const p   = nodePos.get(state);
+        activeDrag = { state, ox: pt.x - p.x, oy: pt.y - p.y };
+        g.classList.add('dragging');
+        document.body.style.cursor = 'grabbing';
+      });
+
+      nodesLayer.appendChild(g);
+    });
+  }
+
+  function svgCursorPoint(svg, e) {
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX; pt.y = e.clientY;
+    return pt.matrixTransform(svg.getScreenCTM().inverse());
+  }
+
+  document.addEventListener('mousemove', e => {
+    if (!activeDrag) return;
+    const svg = document.getElementById('graph-svg');
+    const pt  = svgCursorPoint(svg, e);
+    nodePos.set(activeDrag.state, { x: pt.x - activeDrag.ox, y: pt.y - activeDrag.oy });
+    renderGraph();
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!activeDrag) return;
+    activeDrag = null;
+    document.body.style.cursor = '';
+  });
+
+  // ── Panel resize (left) ──────────────────────────────────────────────────────
+  (function () {
+    const handle = document.getElementById('resize-handle');
+    const panel  = document.getElementById('panel');
+    let startX, startW;
+
+    handle.addEventListener('mousedown', e => {
+      startX = e.clientX; startW = panel.offsetWidth;
+      document.body.classList.add('resizing');
+      e.preventDefault();
+    });
+    document.addEventListener('mousemove', e => {
+      if (!document.body.classList.contains('resizing')) return;
+      const minW = parseInt(getComputedStyle(panel).minWidth);
+      const maxW = window.innerWidth * 0.70;
+      panel.style.width = Math.min(maxW, Math.max(minW, startW + (e.clientX - startX))) + 'px';
+    });
+    document.addEventListener('mouseup', () => { document.body.classList.remove('resizing'); });
+  })();
+
+  // ── Panel resize (right) ─────────────────────────────────────────────────────
+  (function () {
+    const handle = document.getElementById('right-resize-handle');
+    const panel  = document.getElementById('right-panel');
+    let startX, startW;
+
+    handle.addEventListener('mousedown', e => {
+      startX = e.clientX; startW = panel.offsetWidth;
+      document.body.classList.add('resizing-right');
+      e.preventDefault();
+    });
+    document.addEventListener('mousemove', e => {
+      if (!document.body.classList.contains('resizing-right')) return;
+      const minW = parseInt(getComputedStyle(panel).minWidth);
+      const maxW = window.innerWidth * 0.50;
+      // dragging left increases width
+      panel.style.width = Math.min(maxW, Math.max(minW, startW - (e.clientX - startX))) + 'px';
+    });
+    document.addEventListener('mouseup', () => { document.body.classList.remove('resizing-right'); });
+  })();
+
+  // ── Boot ────────────────────────────────────────────────────────────────────
+  render();
+</script>
+</body>
+</html>
