@@ -636,7 +636,7 @@
     </div>
     <div style="display:flex; align-items:center; justify-content:space-between; margin-top:3px;">
       <p>Define alphabet, states, and transitions</p>
-      <button class="btn-reset-machine" onclick="resetMachine()">Reset machine</button>
+      <button class="btn-reset-machine" onclick="resetMachine()"><svg width="11" height="11" viewBox="0 0 13 13" fill="none" style="display:inline;vertical-align:middle;margin-right:4px"><path d="M2 6.5A4.5 4.5 0 1 0 3.2 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M2 1.5v2.5h2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Reset machine</button>
     </div>
   </div>
   <div id="panel-body">
@@ -815,7 +815,7 @@
     btnPlay.disabled = !canPlay;
 
     // Reset
-    document.getElementById('btn-reset').innerHTML = `${ICONS.reset} Reset`;
+    document.getElementById('btn-reset').innerHTML = `${ICONS.reset} Reset execution`;
 
     // Steps
     const btnBack = document.getElementById('btn-step-back');
